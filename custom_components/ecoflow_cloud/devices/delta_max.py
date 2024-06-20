@@ -1,14 +1,14 @@
 from homeassistant.const import Platform
 
 from . import const, BaseDevice, EntityMigration, MigrationAction
-from .const import ATTR_DESIGN_CAPACITY, ATTR_FULL_CAPACITY, ATTR_REMAIN_CAPACITY
 from .. import EcoflowMQTTClient
 from ..entities import BaseSensorEntity, BaseNumberEntity, BaseSwitchEntity, BaseSelectEntity
 from ..number import ChargingPowerEntity, MinBatteryLevelEntity, MaxBatteryLevelEntity, \
     MaxGenStopLevelEntity, MinGenStartLevelEntity
 from ..sensor import LevelSensorEntity, RemainSensorEntity, TempSensorEntity, CyclesSensorEntity, \
     InWattsSensorEntity, OutWattsSensorEntity, StatusSensorEntity, MilliVoltSensorEntity, \
-    InMilliVoltSensorEntity, OutMilliVoltSensorEntity
+    InMilliVoltSensorEntity, OutMilliVoltSensorEntity, CapacitySensorEntity, InWattsSolarSensorEntity, \
+    OutWattsDcSensorEntity
 from ..switch import BeeperEntity, EnabledEntity
 
 
@@ -16,9 +16,13 @@ class DeltaMax(BaseDevice):
     def sensors(self, client: EcoflowMQTTClient) -> list[BaseSensorEntity]:
         return [
             LevelSensorEntity(client, "bmsMaster.soc", const.MAIN_BATTERY_LEVEL)
-                .attr("bmsMaster.designCap", ATTR_DESIGN_CAPACITY, 0)
-                .attr("bmsMaster.fullCap", ATTR_FULL_CAPACITY, 0)
-                .attr("bmsMaster.remainCap", ATTR_REMAIN_CAPACITY, 0),
+                .attr("bmsMaster.designCap", const.ATTR_DESIGN_CAPACITY, 0)
+                .attr("bmsMaster.fullCap", const.ATTR_FULL_CAPACITY, 0)
+                .attr("bmsMaster.remainCap", const.ATTR_REMAIN_CAPACITY, 0),
+            CapacitySensorEntity(client, "bmsMaster.designCap", const.MAIN_DESIGN_CAPACITY, False),
+            CapacitySensorEntity(client, "bmsMaster.fullCap", const.MAIN_FULL_CAPACITY, False),
+            CapacitySensorEntity(client, "bmsMaster.remainCap", const.MAIN_REMAIN_CAPACITY, False),
+
             LevelSensorEntity(client, "ems.lcdShowSoc", const.COMBINED_BATTERY_LEVEL),
             InWattsSensorEntity(client, "pd.wattsInSum", const.TOTAL_IN_POWER),
             OutWattsSensorEntity(client, "pd.wattsOutSum", const.TOTAL_OUT_POWER),
@@ -29,12 +33,8 @@ class DeltaMax(BaseDevice):
             InMilliVoltSensorEntity(client, "inv.acInVol", const.AC_IN_VOLT),
             OutMilliVoltSensorEntity(client, "inv.invOutVol", const.AC_OUT_VOLT),
 
-            InWattsSensorEntity(client, "mppt.inWatts", const.SOLAR_IN_POWER),
-
-
-            # OutWattsSensorEntity(client, "pd.carWatts", const.DC_OUT_POWER),
-            # the same value as pd.carWatts
-            OutWattsSensorEntity(client, "mppt.outWatts", const.DC_OUT_POWER),
+            InWattsSolarSensorEntity(client, "mppt.inWatts", const.SOLAR_IN_POWER),
+            OutWattsDcSensorEntity(client, "mppt.outWatts", const.DC_OUT_POWER),
 
             OutWattsSensorEntity(client, "pd.typec1Watts", const.TYPEC_1_OUT_POWER),
             OutWattsSensorEntity(client, "pd.typec2Watts", const.TYPEC_2_OUT_POWER),
@@ -51,11 +51,15 @@ class DeltaMax(BaseDevice):
             TempSensorEntity(client, "inv.outTemp", "Inv Out Temperature"),
             CyclesSensorEntity(client, "bmsMaster.cycles", const.CYCLES),
 
-            TempSensorEntity(client, "bmsMaster.temp", const.BATTERY_TEMP),
+            TempSensorEntity(client, "bmsMaster.temp", const.BATTERY_TEMP)
+                .attr("bmsMaster.minCellTemp", const.ATTR_MIN_CELL_TEMP, 0)
+                .attr("bmsMaster.maxCellTemp", const.ATTR_MAX_CELL_TEMP, 0),
             TempSensorEntity(client, "bmsMaster.minCellTemp", const.MIN_CELL_TEMP, False),
             TempSensorEntity(client, "bmsMaster.maxCellTemp", const.MAX_CELL_TEMP, False),
 
-            MilliVoltSensorEntity(client, "bmsMaster.vol", const.BATTERY_VOLT, False),
+            MilliVoltSensorEntity(client, "bmsMaster.vol", const.BATTERY_VOLT, False)
+                .attr("bmsMaster.minCellVol", const.ATTR_MIN_CELL_VOLT, 0)
+                .attr("bmsMaster.maxCellVol", const.ATTR_MAX_CELL_VOLT, 0),
             MilliVoltSensorEntity(client, "bmsMaster.minCellVol", const.MIN_CELL_VOLT, False),
             MilliVoltSensorEntity(client, "bmsMaster.maxCellVol", const.MAX_CELL_VOLT, False),
 
@@ -78,31 +82,31 @@ class DeltaMax(BaseDevice):
     def numbers(self, client: EcoflowMQTTClient) -> list[BaseNumberEntity]:
         return [
             MaxBatteryLevelEntity(client, "ems.maxChargeSoc", const.MAX_CHARGE_LEVEL, 50, 100,
-                                  lambda value: {"moduleType": 2, "operateType": "upsConfig",
-                                                 "params": {"maxChgSoc": int(value)}}),
+                                  lambda value: {"moduleType": 2, "operateType": "TCP",
+                                                 "params": {"id": 49, "maxChgSoc": value}}),
 
             MinBatteryLevelEntity(client, "ems.minDsgSoc", const.MIN_DISCHARGE_LEVEL, 0, 30,
-                                  lambda value: {"moduleType": 2, "operateType": "dsgCfg",
-                                                 "params": {"minDsgSoc": int(value)}}),
+                                  lambda value: {"moduleType": 2, "operateType": "TCP",
+                                                 "params": {"id": 51, "minDsgSoc": value}}),
 
             MinGenStartLevelEntity(client, "ems.minOpenOilEbSoc", const.GEN_AUTO_START_LEVEL, 0, 30,
-                                   lambda value: {"moduleType": 2, "operateType": "closeOilSoc",
-                                                  "params": {"closeOilSoc": value}}),
+                                   lambda value: {"moduleType": 2, "operateType": "TCP",
+                                                  "params": {"id": 52, "openOilSoc": value}}),
 
             MaxGenStopLevelEntity(client, "ems.maxCloseOilEbSoc", const.GEN_AUTO_STOP_LEVEL, 50, 100,
-                                  lambda value: {"moduleType": 2, "operateType": "openOilSoc",
-                                                 "params": {"openOilSoc": value}}),
+                                  lambda value: {"moduleType": 2, "operateType": "TCP",
+                                                 "params": {"id": 53, "closeOilSoc": value}}),
 
-            ChargingPowerEntity(client, "inv.cfgFastChgWatt", const.AC_CHARGING_POWER, 400, 2200,
-                                lambda value: {"moduleType": 5, "operateType": "acChgCfg",
-                                               "params": {"chgWatts": int(value), "chgPauseFlag": 255}})
+            ChargingPowerEntity(client, "inv.cfgFastChgWatt", const.AC_CHARGING_POWER, 200, 2000,
+                                lambda value: {"moduleType": 0, "operateType": "TCP",
+                                               "params": {"slowChgPower": value, "id": 69}}),
 
         ]
 
     def switches(self, client: EcoflowMQTTClient) -> list[BaseSwitchEntity]:
         return [
             BeeperEntity(client, "pd.beepState", const.BEEPER,
-                         lambda value: {"moduleType": 5, "operateType": "quietMode", "params": {"enabled": value}}),
+                         lambda value: {"moduleType": 5, "operateType": "TCP", "params": {"id": 38, "enabled": value}}),
 
             EnabledEntity(client, "pd.dcOutState", const.USB_ENABLED,
                           lambda value: {"moduleType": 0, "operateType": "TCP", "params": {"enabled": value, "id": 34  }}),

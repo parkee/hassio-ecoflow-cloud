@@ -15,4 +15,5 @@
     "jsonpath-ng>=1.6.0"
   ],
   "version": "0.13.0-pre"
+  "version": "0.13.3"
 }

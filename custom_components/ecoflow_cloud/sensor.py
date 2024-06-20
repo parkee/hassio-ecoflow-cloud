@@ -38,7 +38,7 @@ class MiscBinarySensorEntity(BinarySensorEntity, EcoFlowDictEntity):
     def _update_value(self, val: Any) -> bool:
         self._attr_is_on = bool(val)
         return True
-
+    
 
 class ChargingStateSensorEntity(BaseSensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -91,6 +91,20 @@ class RemainSensorEntity(BaseSensorEntity):
         return super()._update_value(ival)
 
 
+class SecondsRemainSensorEntity(BaseSensorEntity):
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_value = 0
+
+    def _update_value(self, val: Any) -> Any:
+        ival = int(val)
+        if ival < 0 or ival > 5000:
+            ival = 0
+
+        return super()._update_value(ival)
+
+
 class TempSensorEntity(BaseSensorEntity):
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -103,6 +117,9 @@ class DecicelsiusSensorEntity(TempSensorEntity):
     def _update_value(self, val: Any) -> bool:
         return super()._update_value(int(val) / 10)
 
+class MilliCelsiusSensorEntity(TempSensorEntity):
+    def _update_value(self, val: Any) -> bool:
+        return super()._update_value(int(val) / 100)
 
 class VoltSensorEntity(BaseSensorEntity):
     _attr_device_class = SensorDeviceClass.VOLTAGE
@@ -178,12 +195,19 @@ class EnergySensorEntity(BaseSensorEntity):
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
     def _update_value(self, val: Any) -> bool:
         ival = int(val)
         if ival > 0:
-          return super()._update_value(ival)
+            return super()._update_value(ival)
         else:
-          return False
+            return False
+
+
+class CapacitySensorEntity(BaseSensorEntity):
+    _attr_device_class = SensorDeviceClass.CURRENT
+    _attr_native_unit_of_measurement = "mAh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
 
 class DeciwattsSensorEntity(WattsSensorEntity):
@@ -216,10 +240,26 @@ class OutWattsDcSensorEntity(WattsSensorEntity):
 class InVoltSensorEntity(VoltSensorEntity):
     _attr_icon = "mdi:transmission-tower-import"
 
+class InVoltSolarSensorEntity(VoltSensorEntity):
+    _attr_icon = "mdi:solar-power"
+
+    def _update_value(self, val: Any) -> bool:
+        return super()._update_value(int(val) / 10)
+
+class OutVoltDcSensorEntity(VoltSensorEntity):
+    _attr_icon = "mdi:transmission-tower-export"
+    
+    def _update_value(self, val: Any) -> bool:
+        return super()._update_value(int(val) / 10)      
 
 class InAmpSensorEntity(AmpSensorEntity):
     _attr_icon = "mdi:transmission-tower-import"
 
+class InAmpSolarSensorEntity(AmpSensorEntity):
+    _attr_icon = "mdi:solar-power"
+
+    def _update_value(self, val: Any) -> bool:
+        return super()._update_value(int(val) * 10)
 
 class InEnergySensorEntity(EnergySensorEntity):
     _attr_icon = "mdi:transmission-tower-import"
@@ -285,19 +325,19 @@ class StatusSensorEntity(SensorEntity, EcoFlowAbstractEntity):
                 # online, updated and outdated - reconnect
                 self._attrs[ATTR_STATUS_RECONNECTS] = self._attrs[ATTR_STATUS_RECONNECTS] + 1
                 self._client.reconnect()
-                self.async_write_ha_state()
+                self.schedule_update_ha_state()
 
         elif not self._client.is_connected():  # validate connection even for offline device
             self._attrs[ATTR_STATUS_RECONNECTS] = self._attrs[ATTR_STATUS_RECONNECTS] + 1
             self._client.reconnect()
-            self.async_write_ha_state()
+            self.schedule_update_ha_state()
 
     def __params_update(self, data: dict[str, Any]):
         self._attrs[ATTR_STATUS_DATA_LAST_UPDATE] = self._client.data.params_time()
         if self._online == 0:
             self._update_status(0)
 
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()
 
     def _update_status(self, data_outdated_sec):
         if data_outdated_sec > self.__check_interval_sec * self.DEADLINE_PHASE:
@@ -309,7 +349,7 @@ class StatusSensorEntity(SensorEntity, EcoFlowAbstractEntity):
 
         self._attrs[ATTR_STATUS_LAST_UPDATE] = utcnow()
         self._attrs[ATTR_STATUS_UPDATES] = self._attrs[ATTR_STATUS_UPDATES] + 1
-        self.async_write_ha_state()
+        self.schedule_update_ha_state()
 
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
@@ -350,4 +390,4 @@ class QuotasStatusSensorEntity(StatusSensorEntity):
             else:
                 self._attr_native_value = "offline"
 
-            self.async_write_ha_state()
+            self.schedule_update_ha_state()

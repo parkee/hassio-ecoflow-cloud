@@ -5,6 +5,7 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.button import ButtonEntity
 from homeassistant.const import Platform
 
 from ..mqtt.ecoflow_mqtt import EcoflowMQTTClient
@@ -44,6 +45,9 @@ class BaseDevice(ABC):
     def selects(self, client: EcoflowMQTTClient) -> list[SelectEntity]:
         pass
 
+    def buttons(self, client: EcoflowMQTTClient) -> list[ButtonEntity]:
+        return []
+
     def migrate(self, version) -> list[EntityMigration]:
         return []
 
@@ -57,6 +61,9 @@ class DiagnosticDevice(BaseDevice):
         return []
 
     def switches(self, client: EcoflowMQTTClient) -> list[SwitchEntity]:
+        return []
+
+    def buttons(self, client: EcoflowMQTTClient) -> list[ButtonEntity]:
         return []
 
     def selects(self, client: EcoflowMQTTClient) -> list[SelectEntity]:

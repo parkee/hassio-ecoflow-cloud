@@ -1,14 +1,14 @@
 from homeassistant.const import Platform
 
 from . import const, BaseDevice, EntityMigration, MigrationAction
-from .const import ATTR_DESIGN_CAPACITY, ATTR_FULL_CAPACITY, ATTR_REMAIN_CAPACITY, BATTERY_CHARGING_STATE
 from ..entities import BaseSensorEntity, BaseNumberEntity, BaseSwitchEntity, BaseSelectEntity
 from ..mqtt.ecoflow_mqtt import EcoflowMQTTClient
 from ..number import ChargingPowerEntity, MaxBatteryLevelEntity, MinBatteryLevelEntity
 from ..select import DictSelectEntity, TimeoutDictSelectEntity
 from ..sensor import LevelSensorEntity, RemainSensorEntity, TempSensorEntity, \
     CyclesSensorEntity, InWattsSensorEntity, OutWattsSensorEntity, VoltSensorEntity, StatusSensorEntity, \
-    MilliVoltSensorEntity, InMilliVoltSensorEntity, OutMilliVoltSensorEntity, ChargingStateSensorEntity
+    MilliVoltSensorEntity, InMilliVoltSensorEntity, OutMilliVoltSensorEntity, ChargingStateSensorEntity, \
+    CapacitySensorEntity
 from ..switch import EnabledEntity
 
 
@@ -19,13 +19,18 @@ class River2(BaseDevice):
     def sensors(self, client: EcoflowMQTTClient) -> list[BaseSensorEntity]:
         return [
             LevelSensorEntity(client, "bms_bmsStatus.soc", const.MAIN_BATTERY_LEVEL)
-                .attr("bms_bmsStatus.designCap", ATTR_DESIGN_CAPACITY, 0)
-                .attr("bms_bmsStatus.fullCap", ATTR_FULL_CAPACITY, 0)
-                .attr("bms_bmsStatus.remainCap", ATTR_REMAIN_CAPACITY, 0),
+                .attr("bms_bmsStatus.designCap", const.ATTR_DESIGN_CAPACITY, 0)
+                .attr("bms_bmsStatus.fullCap", const.ATTR_FULL_CAPACITY, 0)
+                .attr("bms_bmsStatus.remainCap", const.ATTR_REMAIN_CAPACITY, 0),
+            CapacitySensorEntity(client, "bms_bmsStatus.designCap", const.MAIN_DESIGN_CAPACITY, False),
+            CapacitySensorEntity(client, "bms_bmsStatus.fullCap", const.MAIN_FULL_CAPACITY, False),
+            CapacitySensorEntity(client, "bms_bmsStatus.remainCap", const.MAIN_REMAIN_CAPACITY, False),
+
+            LevelSensorEntity(client, "bms_bmsStatus.soh", const.SOH),
 
             LevelSensorEntity(client, "bms_emsStatus.lcdShowSoc", const.COMBINED_BATTERY_LEVEL),
 
-            ChargingStateSensorEntity(client, "bms_emsStatus.chgState", BATTERY_CHARGING_STATE),
+            ChargingStateSensorEntity(client, "bms_emsStatus.chgState", const.BATTERY_CHARGING_STATE),
 
             InWattsSensorEntity(client, "pd.wattsInSum", const.TOTAL_IN_POWER),
             OutWattsSensorEntity(client, "pd.wattsOutSum", const.TOTAL_OUT_POWER),
@@ -51,11 +56,15 @@ class River2(BaseDevice):
             TempSensorEntity(client, "inv.outTemp", "Inv Out Temperature"),
             CyclesSensorEntity(client, "bms_bmsStatus.cycles", const.CYCLES),
 
-            TempSensorEntity(client, "bms_bmsStatus.temp", const.BATTERY_TEMP),
+            TempSensorEntity(client, "bms_bmsStatus.temp", const.BATTERY_TEMP)
+                .attr("bms_bmsStatus.minCellTemp", const.ATTR_MIN_CELL_TEMP, 0)
+                .attr("bms_bmsStatus.maxCellTemp", const.ATTR_MAX_CELL_TEMP, 0),
             TempSensorEntity(client, "bms_bmsStatus.minCellTemp", const.MIN_CELL_TEMP, False),
             TempSensorEntity(client, "bms_bmsStatus.maxCellTemp", const.MAX_CELL_TEMP, False),
 
-            VoltSensorEntity(client, "bms_bmsStatus.vol", const.BATTERY_VOLT, False),
+            VoltSensorEntity(client, "bms_bmsStatus.vol", const.BATTERY_VOLT, False)
+                .attr("bms_bmsStatus.minCellVol", const.ATTR_MIN_CELL_VOLT, 0)
+                .attr("bms_bmsStatus.maxCellVol", const.ATTR_MAX_CELL_VOLT, 0),
             MilliVoltSensorEntity(client, "bms_bmsStatus.minCellVol", const.MIN_CELL_VOLT, False),
             MilliVoltSensorEntity(client, "bms_bmsStatus.maxCellVol", const.MAX_CELL_VOLT, False),
 
@@ -94,7 +103,7 @@ class River2(BaseDevice):
             EnabledEntity(client, "pd.carState", const.DC_ENABLED,
                           lambda value: {"moduleType": 5, "operateType": "mpptCar", "params": {"enabled": value}})
         ]
-
+    
     def selects(self, client: EcoflowMQTTClient) -> list[BaseSelectEntity]:
         return [
             DictSelectEntity(client, "mppt.dcChgCurrent", const.DC_CHARGE_CURRENT, const.DC_CHARGE_CURRENT_OPTIONS,

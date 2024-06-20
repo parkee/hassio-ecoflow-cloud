@@ -1,17 +1,14 @@
 from homeassistant.const import Platform
 
 from . import const, BaseDevice, EntityMigration, MigrationAction
-from .const import ATTR_DESIGN_CAPACITY, ATTR_FULL_CAPACITY, ATTR_REMAIN_CAPACITY
 from ..entities import BaseSensorEntity, BaseNumberEntity, BaseSwitchEntity, BaseSelectEntity
 from ..mqtt.ecoflow_mqtt import EcoflowMQTTClient
-from ..number import ChargingPowerEntity, MaxBatteryLevelEntity, MinBatteryLevelEntity, MinGenStartLevelEntity, \
-    MaxGenStopLevelEntity
+from ..number import ChargingPowerEntity, MaxBatteryLevelEntity, MinBatteryLevelEntity
 from ..select import DictSelectEntity, TimeoutDictSelectEntity
 from ..sensor import LevelSensorEntity, WattsSensorEntity, RemainSensorEntity, TempSensorEntity, \
-    CyclesSensorEntity, InWattsSensorEntity, OutWattsSensorEntity, OutWattsDcSensorEntity, VoltSensorEntity, \
-    InWattsSolarSensorEntity, \
+    CyclesSensorEntity, InWattsSensorEntity, OutWattsSensorEntity, OutWattsDcSensorEntity, InWattsSolarSensorEntity, \
     StatusSensorEntity, InEnergySensorEntity, OutEnergySensorEntity, MilliVoltSensorEntity, InMilliVoltSensorEntity, \
-    OutMilliVoltSensorEntity
+    OutMilliVoltSensorEntity, CapacitySensorEntity
 from ..switch import BeeperEntity, EnabledEntity
 
 
@@ -19,9 +16,15 @@ class DeltaMini(BaseDevice):
     def sensors(self, client: EcoflowMQTTClient) -> list[BaseSensorEntity]:
         return [
             LevelSensorEntity(client, "bmsMaster.soc", const.MAIN_BATTERY_LEVEL)
-                .attr("bmsMaster.designCap", ATTR_DESIGN_CAPACITY, 0)
-                .attr("bmsMaster.fullCap", ATTR_FULL_CAPACITY, 0)
-                .attr("bmsMaster.remainCap", ATTR_REMAIN_CAPACITY, 0),
+                .attr("bmsMaster.designCap", const.ATTR_DESIGN_CAPACITY, 0)
+                .attr("bmsMaster.fullCap", const.ATTR_FULL_CAPACITY, 0)
+                .attr("bmsMaster.remainCap", const.ATTR_REMAIN_CAPACITY, 0),
+            CapacitySensorEntity(client, "bmsMaster.designCap", const.MAIN_DESIGN_CAPACITY, False),
+            CapacitySensorEntity(client, "bmsMaster.fullCap", const.MAIN_FULL_CAPACITY, False),
+            CapacitySensorEntity(client, "bmsMaster.remainCap", const.MAIN_REMAIN_CAPACITY, False),
+
+            LevelSensorEntity(client, "bmsMaster.soh", const.SOH),
+
             LevelSensorEntity(client, "ems.lcdShowSoc", const.COMBINED_BATTERY_LEVEL),
 
             WattsSensorEntity(client, "pd.wattsInSum", const.TOTAL_IN_POWER),
@@ -36,9 +39,8 @@ class DeltaMini(BaseDevice):
             InWattsSolarSensorEntity(client, "mppt.inWatts", const.SOLAR_IN_POWER),
 
             OutWattsDcSensorEntity(client, "mppt.outWatts", const.DC_OUT_POWER),
-            # OutWattsSensorEntity(client, "pd.carWatts", const.DC_OUT_POWER),
 
-            OutWattsSensorEntity(client, "mppt.carOutWatts", const.DC_CAR_OUT_POWER),
+            OutWattsDcSensorEntity(client, "mppt.carOutWatts", const.DC_CAR_OUT_POWER),
             OutWattsSensorEntity(client, "mppt.dcdc12vWatts", const.DC_ANDERSON_OUT_POWER),
 
             OutWattsSensorEntity(client, "pd.typec1Watts", const.TYPEC_1_OUT_POWER),
@@ -91,7 +93,7 @@ class DeltaMini(BaseDevice):
             #                       lambda value: {"moduleType": 0, "operateType": "TCP",
             #                                      "params": {"closeOilSoc": value, "id": 53}}),
 
-            ChargingPowerEntity(client, "inv.cfgSlowChgWatts", const.AC_CHARGING_POWER, 200, 2900,
+            ChargingPowerEntity(client, "inv.cfgSlowChgWatts", const.AC_CHARGING_POWER, 200, 900,
                                 lambda value: {"moduleType": 0, "operateType": "TCP",
                                                "params": {"slowChgPower": value, "id": 69}}),
 

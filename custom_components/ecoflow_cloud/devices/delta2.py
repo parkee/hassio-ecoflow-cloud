@@ -1,15 +1,14 @@
 from homeassistant.const import Platform
 
 from . import const, BaseDevice, EntityMigration, MigrationAction
-from .const import ATTR_DESIGN_CAPACITY, ATTR_FULL_CAPACITY, ATTR_REMAIN_CAPACITY
 from .. import EcoflowMQTTClient
-from ..entities import BaseSensorEntity, BaseNumberEntity, BaseSwitchEntity, BaseSelectEntity, EcoFlowAbstractEntity
+from ..entities import BaseSensorEntity, BaseNumberEntity, BaseSwitchEntity, BaseSelectEntity
 from ..number import ChargingPowerEntity, MinBatteryLevelEntity, MaxBatteryLevelEntity, \
     MaxGenStopLevelEntity, MinGenStartLevelEntity, BatteryBackupLevel
 from ..select import DictSelectEntity, TimeoutDictSelectEntity
 from ..sensor import LevelSensorEntity, RemainSensorEntity, TempSensorEntity, CyclesSensorEntity, \
     InWattsSensorEntity, OutWattsSensorEntity, QuotasStatusSensorEntity, MilliVoltSensorEntity, InMilliVoltSensorEntity, \
-    OutMilliVoltSensorEntity
+    OutMilliVoltSensorEntity, CapacitySensorEntity
 from ..switch import BeeperEntity, EnabledEntity
 
 
@@ -17,9 +16,15 @@ class Delta2(BaseDevice):
     def sensors(self, client: EcoflowMQTTClient) -> list[BaseSensorEntity]:
         return [
             LevelSensorEntity(client, "bms_bmsStatus.soc", const.MAIN_BATTERY_LEVEL)
-                .attr("bms_bmsStatus.designCap", ATTR_DESIGN_CAPACITY, 0)
-                .attr("bms_bmsStatus.fullCap", ATTR_FULL_CAPACITY, 0)
-                .attr("bms_bmsStatus.remainCap", ATTR_REMAIN_CAPACITY, 0),
+                .attr("bms_bmsStatus.designCap", const.ATTR_DESIGN_CAPACITY, 0)
+                .attr("bms_bmsStatus.fullCap", const.ATTR_FULL_CAPACITY, 0)
+                .attr("bms_bmsStatus.remainCap", const.ATTR_REMAIN_CAPACITY, 0),
+            CapacitySensorEntity(client, "bms_bmsStatus.designCap", const.MAIN_DESIGN_CAPACITY, False),
+            CapacitySensorEntity(client, "bms_bmsStatus.fullCap", const.MAIN_FULL_CAPACITY, False),
+            CapacitySensorEntity(client, "bms_bmsStatus.remainCap", const.MAIN_REMAIN_CAPACITY, False),
+
+            LevelSensorEntity(client, "bms_bmsStatus.soh", const.SOH),
+
             LevelSensorEntity(client, "bms_emsStatus.lcdShowSoc", const.COMBINED_BATTERY_LEVEL),
             InWattsSensorEntity(client, "pd.wattsInSum", const.TOTAL_IN_POWER),
             OutWattsSensorEntity(client, "pd.wattsOutSum", const.TOTAL_OUT_POWER),
@@ -53,24 +58,37 @@ class Delta2(BaseDevice):
             TempSensorEntity(client, "inv.outTemp", "Inv Out Temperature"),
             CyclesSensorEntity(client, "bms_bmsStatus.cycles", const.CYCLES),
 
-            TempSensorEntity(client, "bms_bmsStatus.temp", const.BATTERY_TEMP),
+            TempSensorEntity(client, "bms_bmsStatus.temp", const.BATTERY_TEMP)
+                .attr("bms_bmsStatus.minCellTemp", const.ATTR_MIN_CELL_TEMP, 0)
+                .attr("bms_bmsStatus.maxCellTemp", const.ATTR_MAX_CELL_TEMP, 0),
             TempSensorEntity(client, "bms_bmsStatus.minCellTemp", const.MIN_CELL_TEMP, False),
             TempSensorEntity(client, "bms_bmsStatus.maxCellTemp", const.MAX_CELL_TEMP, False),
 
-            MilliVoltSensorEntity(client, "bms_bmsStatus.vol", const.BATTERY_VOLT, False),
+            MilliVoltSensorEntity(client, "bms_bmsStatus.vol", const.BATTERY_VOLT, False)
+                .attr("bms_bmsStatus.minCellVol", const.ATTR_MIN_CELL_VOLT, 0)
+                .attr("bms_bmsStatus.maxCellVol", const.ATTR_MAX_CELL_VOLT, 0),
             MilliVoltSensorEntity(client, "bms_bmsStatus.minCellVol", const.MIN_CELL_VOLT, False),
             MilliVoltSensorEntity(client, "bms_bmsStatus.maxCellVol", const.MAX_CELL_VOLT, False),
 
             # Optional Slave Battery
             LevelSensorEntity(client, "bms_slave.soc", const.SLAVE_BATTERY_LEVEL, False, True)
-                .attr("bms_slave.designCap", ATTR_DESIGN_CAPACITY, 0)
-                .attr("bms_slave.fullCap", ATTR_FULL_CAPACITY, 0)
-                .attr("bms_slave.remainCap", ATTR_REMAIN_CAPACITY, 0),
-            TempSensorEntity(client, "bms_slave.temp", const.SLAVE_BATTERY_TEMP, False, True),
+                .attr("bms_slave.designCap", const.ATTR_DESIGN_CAPACITY, 0)
+                .attr("bms_slave.fullCap", const.ATTR_FULL_CAPACITY, 0)
+                .attr("bms_slave.remainCap", const.ATTR_REMAIN_CAPACITY, 0),
+            CapacitySensorEntity(client, "bms_slave.designCap", const.SLAVE_DESIGN_CAPACITY, False),
+            CapacitySensorEntity(client, "bms_slave.fullCap", const.SLAVE_FULL_CAPACITY, False),
+            CapacitySensorEntity(client, "bms_slave.remainCap", const.SLAVE_REMAIN_CAPACITY, False),
+
+            LevelSensorEntity(client, "bms_slave.soh", const.SLAVE_SOH),
+            TempSensorEntity(client, "bms_slave.temp", const.SLAVE_BATTERY_TEMP, False, True)
+                .attr("bms_slave.minCellTemp", const.ATTR_MIN_CELL_TEMP, 0)
+                .attr("bms_slave.maxCellTemp", const.ATTR_MAX_CELL_TEMP, 0),
             TempSensorEntity(client, "bms_slave.minCellTemp", const.SLAVE_MIN_CELL_TEMP, False),
             TempSensorEntity(client, "bms_slave.maxCellTemp", const.SLAVE_MAX_CELL_TEMP, False),
 
-            MilliVoltSensorEntity(client, "bms_slave.vol", const.SLAVE_BATTERY_VOLT, False),
+            MilliVoltSensorEntity(client, "bms_slave.vol", const.SLAVE_BATTERY_VOLT, False)
+                .attr("bms_slave.minCellVol", const.ATTR_MIN_CELL_VOLT, 0)
+                .attr("bms_slave.maxCellVol", const.ATTR_MAX_CELL_VOLT, 0),
             MilliVoltSensorEntity(client, "bms_slave.minCellVol", const.SLAVE_MIN_CELL_VOLT, False),
             MilliVoltSensorEntity(client, "bms_slave.maxCellVol", const.SLAVE_MAX_CELL_VOLT, False),
 
@@ -98,12 +116,12 @@ class Delta2(BaseDevice):
                                                          "minChgSoc": 0}}),
 
             MinGenStartLevelEntity(client, "bms_emsStatus.minOpenOilEb", const.GEN_AUTO_START_LEVEL, 0, 30,
-                                   lambda value: {"moduleType": 2, "operateType": "closeOilSoc",
-                                                  "params": {"closeOilSoc": value}}),
+                                   lambda value: {"moduleType": 2, "operateType": "openOilSoc",
+                                                  "params": {"openOilSoc": value}}),
 
             MaxGenStopLevelEntity(client, "bms_emsStatus.maxCloseOilEb", const.GEN_AUTO_STOP_LEVEL, 50, 100,
-                                  lambda value: {"moduleType": 2, "operateType": "openOilSoc",
-                                                 "params": {"openOilSoc": value}}),
+                                  lambda value: {"moduleType": 2, "operateType": "closeOilSoc",
+                                                 "params": {"closeOilSoc": value}}),
 
             ChargingPowerEntity(client, "mppt.cfgChgWatts", const.AC_CHARGING_POWER, 200, 1200,
                                 lambda value: {"moduleType": 5, "operateType": "acChgCfg",

@@ -9,6 +9,7 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.entity import Entity, EntityCategory
 
 from ..mqtt.ecoflow_mqtt import EcoflowMQTTClient
@@ -101,6 +102,9 @@ class EcoFlowDictEntity(EcoFlowAbstractEntity):
             if self._update_value(values[0].value):
                 self.async_write_ha_state()
 
+            if self._update_value(data[self._mqtt_key]):
+                self.schedule_update_ha_state()
+
     @property
     def extra_state_attributes(self) -> Mapping[str, Any] | None:
         return self.__attrs
@@ -161,3 +165,8 @@ class BaseSwitchEntity(SwitchEntity, EcoFlowBaseCommandEntity):
 
 class BaseSelectEntity(SelectEntity, EcoFlowBaseCommandEntity):
     pass
+
+
+class BaseButtonEntity(ButtonEntity, EcoFlowBaseCommandEntity):
+    pass
+
