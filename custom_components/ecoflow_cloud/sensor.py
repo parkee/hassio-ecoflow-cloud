@@ -85,7 +85,7 @@ class RemainSensorEntity(BaseSensorEntity):
 
     def _update_value(self, val: Any) -> Any:
         ival = int(val)
-        if ival < 0 or ival > 5000:
+        if ival < 0 or ival >= 5999:
             ival = 0
 
         return super()._update_value(ival)

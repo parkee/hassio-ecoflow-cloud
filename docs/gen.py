@@ -24,9 +24,23 @@ def device_summary(device: BaseDevice) -> str:
         len(device.selects(client))
     )
 
+def get_command_marker_value(e: EcoFlowBaseCommandEntity):
+    _value = MARKER_VALUE
+
+    if getattr(e, "sample_value", None):
+        _value = e.sample_value()
+    elif isinstance(e, BaseSelectEntity):
+        _value = next(iter(e.options_dict().values()))
+        if isinstance(_value, int):
+            _value = MARKER_VALUE
+        # else:
+        #     print(first_value)
+    return _value
+
 
 def command_ro(e: EcoFlowBaseCommandEntity) -> str:
-    command_dict = e.command_dict(MARKER_VALUE)
+    command_dict = e.command_dict(get_command_marker_value(e))
+
     if command_dict is None:
         return " _(read-only)_"
     else:
@@ -34,11 +48,12 @@ def command_ro(e: EcoFlowBaseCommandEntity) -> str:
 
 
 def prepare_options(options: dict[str, int]) -> str:
-    return ", ".join(["%s (%d)" % (k, v) for k, v in options.items()])
+    return ", ".join(["%s (%s)" % (k, str(v)) for k, v in options.items()])
 
 
 def prepare_command(e: EcoFlowBaseCommandEntity) -> str | None:
-    command_dict = e.command_dict(MARKER_VALUE)
+    command_dict = e.command_dict(get_command_marker_value(e))
+
     if command_dict is not None:
         for k, v in command_dict["params"].items():
             if v == MARKER_VALUE:

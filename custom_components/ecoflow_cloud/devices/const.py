@@ -249,7 +249,20 @@ ATTR_MAX_CELL_VOLT = MAX_CELL_VOLT
 BATTERY_AMP = "Battery Current"
 SLAVE_BATTERY_AMP = "Slave Battery Current"
 
+SHP_CIRCUIT_N_MODE = "Circuit %i Mode"
+SHP_CIRCUIT_N_AUTO = "Circuit %i Auto"
+SHP_CIRCUIT_N_POWER = "Circuit %i Power"
+SHP_AC_N_OUT_POWER = "AC%i Out Power"
+SHP_AC_N_IN_POWER = "AC%i In Power"
+SHP_AC_N_BATTERY_LEVEL = "AC%i Battery Level"
+SHP_AC_N_CHARGE_TIME = "AC%i Charge Time"
+SHP_AC_N_DISCHARGE_TIME = "AC%i Discharge Time"
+SHP_AC_N_CHARGING = "AC%i Charging"
+SHP_AC_N_CONNECTED = "AC%i Connected"
+SHP_AC_N_ENABLED = "AC%i Enabled"
+
 FAN_MODE = "Wind speed"
 MAIN_MODE = "Main mode"
 REMOTE_MODE = "Remote startup/shutdown"
 POWER_SUB_MODE = "Sub-mode"
+
