@@ -1,6 +1,6 @@
 {
-  "domain": "ecoflow_cloud",
-  "name": "Ecoflow-Cloud",
+  "domain": "ecoflow_cloud_w_shp",
+  "name": "Ecoflow-Cloud-With-SHP",
   "codeowners": [
     "@tolwi"
   ],
@@ -14,6 +14,6 @@
     "protobuf>=4.23.0",
     "jsonpath-ng>=1.6.0"
   ],
-  "version": "0.13.0-pre"
-  "version": "0.13.3"
+  "version": "0.15.0-pre"
+  "version": "0.15.3"
 }
