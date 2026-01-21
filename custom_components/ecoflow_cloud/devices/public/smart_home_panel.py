@@ -42,7 +42,7 @@ from custom_components.ecoflow_cloud.number import (
     MinBatteryLevelEntity,
     ValueUpdateEntity,
 )
-from custom_components.ecoflow_cloud.select import DictSelectEntity
+from custom_components.ecoflow_cloud.select import CircuitModeSelectEntity, DictSelectEntity
 from custom_components.ecoflow_cloud.sensor import (
     AmpSensorEntity,
     FrequencySensorEntity,
@@ -479,13 +479,8 @@ class SmartHomePanel(BaseDevice):
             .with_icon("mdi:power-plug-battery"),
         ]
 
-        # ===== Load Channel On/Off Switches (cmdSet: 11, id: 16) =====
-        # These control whether the circuit is on (grid/battery) or off
-        for i in range(10):
-            channel_num = i + 1
-            switches.append(
-                self._create_load_channel_switch(client, i, channel_num)
-            )
+        # NOTE: Load Channel On/Off Switches removed - redundant with Circuit Mode selects
+        # which provide Auto/Grid/Battery/Off options (more comprehensive control)
 
         # ===== Backup/Standby Channel Switches (cmdSet: 11, id: 17) =====
         for i in range(2):
@@ -599,17 +594,19 @@ class SmartHomePanel(BaseDevice):
 
         # ===== Circuit Mode Control Selects (cmdSet: 11, id: 16) =====
         # Options: Auto, Grid, Battery, Off
+        # Uses CircuitModeSelectEntity to properly compute state from ctrlMode + ctrlSta
         for i in range(10):
             channel_num = i + 1
             selects.append(
-                DictSelectEntity(
+                CircuitModeSelectEntity(
                     client,
                     self,
                     f"heartbeat.loadCmdChCtrlInfos[{i}].ctrlMode",
+                    f"heartbeat.loadCmdChCtrlInfos[{i}].ctrlSta",
                     f"Circuit {channel_num} Mode",
                     const.CIRCUIT_MODE_OPTIONS,
                     self._make_circuit_mode_command_factory(i),
-                ).with_icon("mdi:power-plug")
+                )
             )
 
         # ===== Backup Channel Mode Control Selects (cmdSet: 11, id: 17) =====
