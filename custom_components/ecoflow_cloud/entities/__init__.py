@@ -9,6 +9,7 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.text import TextEntity
 from homeassistant.helpers.entity import DeviceInfo, Entity, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -293,4 +294,8 @@ class BaseSelectEntity[_CommandArg](SelectEntity, EcoFlowBaseCommandEntity[_Comm
 
 
 class BaseButtonEntity[_CommandArg](ButtonEntity, EcoFlowBaseCommandEntity[_CommandArg]):
+    pass
+
+
+class BaseTextEntity[_CommandArg](TextEntity, EcoFlowBaseCommandEntity[_CommandArg]):
     pass
