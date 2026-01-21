@@ -2519,13 +2519,19 @@ Restart Home Assistant. Once restart is done, use `Add Integration` → `Ecoflow
 
 </p></details>
 
-<details><summary> Smart Home Panel (API) <i>(sensors: 30, binary_sensors: 1, switches: 3, sliders: 2)</i> </summary>
+<details><summary> Smart Home Panel (API) <i>(sensors: 137, binary_sensors: 2, switches: 13, sliders: 14, selects: 26, buttons: 5, texts: 10)</i> </summary>
 <p>
 
 *Sensors*
+- Status
 - Battery Level
 - Battery 1 Level
 - Battery 2 Level  _(disabled)_
+- Backup Full Capacity
+- Power Grid
+- Power Grid Today (energy:  _[Device Name]_ Power Grid Today  Energy)
+- Battery Today (energy:  _[Device Name]_ Battery Today  Energy)
+- Work Time  _(disabled)_
 - Remaining Time
 - Battery 1 Charge Remaining Time  _(disabled)_
 - Battery 2 Charge Remaining Time  _(disabled)_
@@ -2537,34 +2543,65 @@ Restart Home Assistant. Once restart is done, use `Add Integration` → `Ecoflow
 - Battery 2 Input Power  _(disabled)_ (energy:  _[Device Name]_ Battery 2 Input  Energy)
 - Battery 1 Output Power (energy:  _[Device Name]_ Battery 1 Output  Energy)
 - Battery 2 Output Power  _(disabled)_ (energy:  _[Device Name]_ Battery 2 Output  Energy)
-- Power Grid Today
-- Battery Today
-- Power Grid Voltage
-- Power Grid Frequency
-- Battery 1 Current  _(disabled)_
-- Battery 2 Current  _(disabled)_
-- Circuit 1 Current  _(disabled)_
-- Circuit 2 Current  _(disabled)_
-- Circuit 3 Current  _(disabled)_
-- Circuit 4 Current  _(disabled)_
-- Circuit 5 Current  _(disabled)_
-- Circuit 6 Current  _(disabled)_
-- Circuit 7 Current  _(disabled)_
-- Circuit 8 Current  _(disabled)_
-- Circuit 9 Current  _(disabled)_
-- Circuit 10 Current  _(disabled)_
+- Power Grid Voltage  _(disabled)_
+- Power Grid Frequency  _(disabled)_
+- Max Charge Level  _(disabled)_
+- Min Discharge Level  _(disabled)_
+- EPS Mode  _(disabled)_
+- Area Info  _(disabled)_
+- Configuration Status  _(disabled)_
+- Self-Check Status  _(disabled)_
+- Circuit 1-10 Power (energy:  _[Device Name]_ Circuit N  Energy)
+- Circuit 1-10 Supply Status  _(disabled)_
+- Circuit 1-10 Control Mode  _(disabled)_
+- Circuit 1-10 Priority  _(disabled)_
+- Backup Channel 1-2 Supply Status  _(disabled)_
+- Backup Channel 1-2 Control Mode  _(disabled)_
+- Circuit 1-10 Current  _(disabled)_
+- Backup Channel 1-2 Current  _(disabled)_
+- Circuit 1-10 Name  _(disabled)_
+- Split Phase 1-10 Linked  _(disabled)_
+- Split Phase 1-10 Link Channel  _(disabled)_
+- Emergency Mode Configured  _(disabled)_
+- Emergency Backup Mode  _(disabled)_
+- Emergency Overload Mode  _(disabled)_
+- Emergency Priority Circuit 1-10  _(disabled)_
+- Emergency Enabled Circuit 1-10  _(disabled)_
 
 *Binary sensors*
 - Power Grid
+- EPS Mode
 
 *Switches*
-- EPS Mode 
-- Battery 1 Charge 
-- Battery 2 Charge 
+- EPS Mode
+- Backup Channel 1-2
+- Circuit 1-10 Emergency Enabled  _(disabled)_
 
 *Sliders (numbers)*
-- Min Discharge Level 
-- Max Charge Level 
+- Min Discharge Level
+- Max Charge Level
+- Power Grid Voltage Setting  _(disabled)_
+- Power Grid Frequency Setting  _(disabled)_
+- Channel 1-10 Current  _(disabled)_
+
+*Selects*
+- Power Grid Voltage Select  _(disabled)_
+- Power Grid Frequency Select  _(disabled)_
+- Emergency Backup Mode  _(disabled)_
+- Emergency Overload Mode  _(disabled)_
+- Circuit 1-10 Current Limit  _(disabled)_
+- Circuit 1-10 Mode
+- Backup Channel 1-2 Mode  _(disabled)_
+
+*Buttons*
+- Reset Device  _(disabled)_
+- Start Self-Check  _(disabled)_
+- Sync RTC Time
+- Mark Configuration Complete  _(disabled)_
+- Get Configuration Status  _(disabled)_
+
+*Texts*
+- Circuit 1-10 Name  _(disabled)_
 
 </p></details>
 
