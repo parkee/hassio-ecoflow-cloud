@@ -72,3 +72,68 @@ class TimeoutDictSelectEntity(DictSelectEntity):
 
 class PowerDictSelectEntity(DictSelectEntity):
     _attr_icon = "mdi:battery-charging-wireless"
+
+
+class CircuitModeSelectEntity(DictSelectEntity):
+    """
+    Select entity for circuit mode that computes state from ctrlMode and ctrlSta.
+
+    The circuit mode is a combination of two MQTT values:
+    - ctrlMode: 0=Auto, 1=Manual
+    - ctrlSta: 0=Grid, 1=Battery, 2=Off (only relevant when ctrlMode=1)
+
+    Combined states:
+    - Auto (0): ctrlMode=0
+    - Grid (1): ctrlMode=1, ctrlSta=0
+    - Battery (2): ctrlMode=1, ctrlSta=1
+    - Off (3): ctrlMode=1, ctrlSta=2
+    """
+
+    _attr_icon = "mdi:power-plug"
+
+    def __init__(
+        self,
+        client: EcoflowApiClient,
+        device: BaseDevice,
+        ctrl_mode_key: str,
+        ctrl_sta_key: str,
+        title: str,
+        options: dict[str, Any],
+        command: Callable[[int], dict[str, Any] | Message]
+        | Callable[[int, dict[str, Any]], dict[str, Any] | Message]
+        | None,
+        enabled: bool = True,
+        auto_enable: bool = False,
+    ):
+        # Use ctrl_mode_key as the primary mqtt_key for entity updates
+        super().__init__(client, device, ctrl_mode_key, title, options, command, enabled, auto_enable)
+        self._ctrl_sta_key = ctrl_sta_key
+
+    def _update_value(self, val: Any) -> bool:
+        """
+        Compute the combined circuit mode from ctrlMode and ctrlSta.
+
+        This overrides the default behavior to compute the true state.
+        """
+        # Get ctrlMode (the val parameter) and ctrlSta from device params
+        ctrl_mode = int(val) if val is not None else 0
+        ctrl_sta = self._device.data.params.get(self._ctrl_sta_key, 0)
+        if ctrl_sta is not None:
+            ctrl_sta = int(ctrl_sta)
+        else:
+            ctrl_sta = 0
+
+        # Compute combined mode value
+        if ctrl_mode == 0:
+            combined_value = 0  # Auto
+        else:
+            # Manual mode: use ctrlSta to determine Grid/Battery/Off
+            combined_value = 1 + ctrl_sta  # Grid=1, Battery=2, Off=3
+
+        # Find the option that matches this combined value
+        lval = [k for k, v in self._options_dict.items() if v == combined_value]
+        if len(lval) == 1:
+            self._current_option = lval[0]
+            return True
+        else:
+            return False

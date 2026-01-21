@@ -42,7 +42,7 @@ from custom_components.ecoflow_cloud.number import (
     MinBatteryLevelEntity,
     ValueUpdateEntity,
 )
-from custom_components.ecoflow_cloud.select import DictSelectEntity
+from custom_components.ecoflow_cloud.select import CircuitModeSelectEntity, DictSelectEntity
 from custom_components.ecoflow_cloud.sensor import (
     AmpSensorEntity,
     FrequencySensorEntity,
@@ -453,14 +453,7 @@ class SmartHomePanel(BaseDevice):
                     const.CHANNEL_CURRENT_N % channel_num,
                     6,
                     30,
-                    lambda value, params, ch=i: self._create_mqtt_command(
-                        cmdSet=11,
-                        cmdId=20,
-                        params={
-                            "chNum": ch,
-                            "cur": int(value),
-                        },
-                    ),
+                    self._make_channel_current_command(i),
                     enabled=False,
                 ).with_icon("mdi:current-ac")
             )
@@ -486,13 +479,8 @@ class SmartHomePanel(BaseDevice):
             .with_icon("mdi:power-plug-battery"),
         ]
 
-        # ===== Load Channel On/Off Switches (cmdSet: 11, id: 16) =====
-        # These control whether the circuit is on (grid/battery) or off
-        for i in range(10):
-            channel_num = i + 1
-            switches.append(
-                self._create_load_channel_switch(client, i, channel_num)
-            )
+        # NOTE: Load Channel On/Off Switches removed - redundant with Circuit Mode selects
+        # which provide Auto/Grid/Battery/Off options (more comprehensive control)
 
         # ===== Backup/Standby Channel Switches (cmdSet: 11, id: 17) =====
         for i in range(2):
@@ -510,14 +498,7 @@ class SmartHomePanel(BaseDevice):
                     self,
                     f"'emergencyStrategy.chSta'[{i}].isEnable",
                     const.CIRCUIT_N_ENABLED % channel_num,
-                    lambda value, ch=i: self._create_mqtt_command(
-                        cmdSet=11,
-                        cmdId=26,
-                        params={
-                            "chNum": ch,
-                            "isEnable": 1 if value else 0,
-                        },
-                    ),
+                    self._make_emergency_channel_command(i),
                     enabled=False,
                 )
                 .with_category(EntityCategory.CONFIG)
@@ -606,35 +587,26 @@ class SmartHomePanel(BaseDevice):
                     f"'loadChCurInfo.cur'[{i}]",
                     f"Circuit {channel_num} Current Limit",
                     const.CHANNEL_CURRENT_OPTIONS,
-                    lambda value, params, ch=i: self._create_mqtt_command(
-                        cmdSet=11,
-                        cmdId=20,
-                        params={
-                            "chNum": ch,
-                            "cur": int(value),
-                        },
-                    ),
+                    self._make_channel_current_command(i),
                     enabled=False,
                 ).with_icon("mdi:current-ac")
             )
 
         # ===== Circuit Mode Control Selects (cmdSet: 11, id: 16) =====
         # Options: Auto, Grid, Battery, Off
+        # Uses CircuitModeSelectEntity to properly compute state from ctrlMode + ctrlSta
         for i in range(10):
             channel_num = i + 1
             selects.append(
-                DictSelectEntity(
+                CircuitModeSelectEntity(
                     client,
                     self,
                     f"heartbeat.loadCmdChCtrlInfos[{i}].ctrlMode",
+                    f"heartbeat.loadCmdChCtrlInfos[{i}].ctrlSta",
                     f"Circuit {channel_num} Mode",
                     const.CIRCUIT_MODE_OPTIONS,
-                    lambda value, params, ch=i: self._create_circuit_mode_command(
-                        channel=ch,
-                        mode=int(value),
-                        params=params,
-                    ),
-                ).with_icon("mdi:power-plug")
+                    self._make_circuit_mode_command_factory(i),
+                )
             )
 
         # ===== Backup Channel Mode Control Selects (cmdSet: 11, id: 17) =====
@@ -647,15 +619,7 @@ class SmartHomePanel(BaseDevice):
                     f"heartbeat.backupCmdChCtrlInfos[{i}].ctrlMode",
                     f"Backup Channel {channel_num} Mode",
                     const.CHANNEL_CONTROL_MODE_OPTIONS,
-                    lambda value, params, ch=i: self._create_mqtt_command(
-                        cmdSet=11,
-                        cmdId=17,
-                        params={
-                            "ch": 10 + ch,
-                            "ctrlMode": int(value),
-                            "sta": 1,
-                        },
-                    ),
+                    self._make_backup_mode_command(i),
                     enabled=False,
                 ).with_icon("mdi:battery-charging")
             )
@@ -737,19 +701,7 @@ class SmartHomePanel(BaseDevice):
                     self,
                     f"'loadChInfo.info'[{i}].chName",
                     f"Circuit {channel_num} Name",
-                    lambda value, params, ch=i: self._create_mqtt_command(
-                        cmdSet=11,
-                        cmdId=32,
-                        params={
-                            "chNum": ch,
-                            "info": {
-                                "chName": value,
-                                "iconInfo": int(
-                                    params.get(f"loadChInfo.info[{ch}].iconNum", 0)
-                                ),
-                            },
-                        },
-                    ),
+                    self._make_circuit_name_command(i),
                     enabled=False,
                     max_length=32,
                 ).with_icon("mdi:rename")
@@ -970,3 +922,71 @@ class SmartHomePanel(BaseDevice):
                 "week": now.isoweekday(),
             },
         )
+
+    # ===== Factory methods for creating channel-specific commands =====
+    # These methods return 1 or 2 parameter callables that can be used with
+    # the entity command system, which only supports commands with 1 or 2 parameters.
+
+    def _make_channel_current_command(self, channel: int):
+        """Create a command factory for channel current configuration."""
+        def command(value: int, params: dict[str, Any]) -> dict[str, Any]:
+            return self._create_mqtt_command(
+                cmdSet=11,
+                cmdId=20,
+                params={"chNum": channel, "cur": int(value)},
+            )
+        return command
+
+    def _make_circuit_mode_command_factory(self, channel: int):
+        """Create a command factory for circuit mode control."""
+        def command(value: int, params: dict[str, Any]) -> dict[str, Any]:
+            return self._create_circuit_mode_command(
+                channel=channel, mode=int(value), params=params
+            )
+        return command
+
+    def _make_backup_mode_command(self, channel: int):
+        """Create a command factory for backup channel mode control."""
+        def command(value: int, params: dict[str, Any]) -> dict[str, Any]:
+            return self._create_mqtt_command(
+                cmdSet=11,
+                cmdId=17,
+                params={"ch": 10 + channel, "ctrlMode": int(value), "sta": 1},
+            )
+        return command
+
+    def _make_emergency_channel_command(self, channel: int):
+        """Create a command factory for emergency channel enable."""
+        def command(value: int, params: dict[str, Any]) -> dict[str, Any]:
+            return self._create_mqtt_command(
+                cmdSet=11,
+                cmdId=26,
+                params={"chNum": channel, "isEnable": int(value)},
+            )
+        return command
+
+    def _make_channel_switch_command(self, channel: int):
+        """Create a command factory for channel on/off switch."""
+        def command(value: int) -> dict[str, Any]:
+            return self._create_mqtt_command(
+                cmdSet=11,
+                cmdId=16,
+                params={"ch": channel, "ctrlMode": 1, "sta": 2 if value == 0 else 1},
+            )
+        return command
+
+    def _make_circuit_name_command(self, channel: int):
+        """Create a command factory for circuit name configuration."""
+        def command(value: str, params: dict[str, Any]) -> dict[str, Any]:
+            return self._create_mqtt_command(
+                cmdSet=11,
+                cmdId=32,
+                params={
+                    "chNum": channel,
+                    "info": {
+                        "chName": value,
+                        "iconInfo": int(params.get(f"loadChInfo.info[{channel}].iconNum", 0)),
+                    },
+                },
+            )
+        return command
