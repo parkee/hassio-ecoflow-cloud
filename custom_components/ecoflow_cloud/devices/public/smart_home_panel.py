@@ -30,6 +30,7 @@ from homeassistant.components.number import NumberEntity
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.text import TextEntity
 from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.ecoflow_cloud.api import EcoflowApiClient
@@ -58,6 +59,7 @@ from custom_components.ecoflow_cloud.sensor import (
     WattsSensorEntity,
 )
 from custom_components.ecoflow_cloud.switch import EnabledEntity
+from custom_components.ecoflow_cloud.text import TextConfigEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -720,6 +722,40 @@ class SmartHomePanel(BaseDevice):
                 enabled=False,
             ).with_icon("mdi:cog-refresh"),
         ]
+
+    def texts(self, client: EcoflowApiClient) -> list[TextEntity]:
+        """Return all text entities for the Smart Home Panel."""
+        texts = []
+
+        # ===== Circuit Name Configuration (cmdSet: 11, id: 32) =====
+        # Allows setting custom names for each load channel
+        for i in range(10):
+            channel_num = i + 1
+            texts.append(
+                TextConfigEntity(
+                    client,
+                    self,
+                    f"'loadChInfo.info'[{i}].chName",
+                    f"Circuit {channel_num} Name",
+                    lambda value, params, ch=i: self._create_mqtt_command(
+                        cmdSet=11,
+                        cmdId=32,
+                        params={
+                            "chNum": ch,
+                            "info": {
+                                "chName": value,
+                                "iconInfo": int(
+                                    params.get(f"loadChInfo.info[{ch}].iconNum", 0)
+                                ),
+                            },
+                        },
+                    ),
+                    enabled=False,
+                    max_length=32,
+                ).with_icon("mdi:rename")
+            )
+
+        return texts
 
     def flat_json(self):
         """
