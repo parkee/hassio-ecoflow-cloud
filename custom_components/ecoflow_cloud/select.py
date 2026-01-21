@@ -1,5 +1,6 @@
 from typing import Any, Callable
 
+import jsonpath_ng.ext as jp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -108,6 +109,8 @@ class CircuitModeSelectEntity(DictSelectEntity):
         # Use ctrl_mode_key as the primary mqtt_key for entity updates
         super().__init__(client, device, ctrl_mode_key, title, options, command, enabled, auto_enable)
         self._ctrl_sta_key = ctrl_sta_key
+        # Create jsonpath expression for ctrlSta
+        self._ctrl_sta_expr = jp.parse(ctrl_sta_key)
 
     def _update_value(self, val: Any) -> bool:
         """
@@ -115,13 +118,14 @@ class CircuitModeSelectEntity(DictSelectEntity):
 
         This overrides the default behavior to compute the true state.
         """
-        # Get ctrlMode (the val parameter) and ctrlSta from device params
+        # Get ctrlMode (the val parameter)
         ctrl_mode = int(val) if val is not None else 0
-        ctrl_sta = self._device.data.params.get(self._ctrl_sta_key, 0)
-        if ctrl_sta is not None:
-            ctrl_sta = int(ctrl_sta)
-        else:
-            ctrl_sta = 0
+
+        # Get ctrlSta using jsonpath from device params
+        ctrl_sta = 0
+        sta_values = self._ctrl_sta_expr.find(self._device.data.params)
+        if sta_values:
+            ctrl_sta = int(sta_values[0].value) if sta_values[0].value is not None else 0
 
         # Compute combined mode value
         if ctrl_mode == 0:
@@ -137,3 +141,22 @@ class CircuitModeSelectEntity(DictSelectEntity):
             return True
         else:
             return False
+
+    def select_option(self, option: str) -> None:
+        """
+        Override select_option to properly handle combined mode values.
+
+        The parent class sends the combined value (0-3) as the local state update,
+        but ctrlMode should only be 0 or 1. We need to send the correct ctrlMode
+        value for the optimistic local state update.
+        """
+        if self._command:
+            combined_val = self._options_dict[option]
+            # Convert combined value to actual ctrlMode (0=Auto, 1=Manual for Grid/Battery/Off)
+            actual_ctrl_mode = 0 if combined_val == 0 else 1
+            # Send the command with combined value, but update local state with actual ctrlMode
+            self._client.send_set_message(
+                self._device.device_info.sn,
+                {self._mqtt_key_adopted: actual_ctrl_mode},
+                self.command_dict(combined_val),
+            )
