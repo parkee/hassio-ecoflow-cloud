@@ -441,3 +441,80 @@ SMART_BACKUP_MODE_OPTIONS = {
     "Self-powered" : 2,
     "Scheduled tasks": 3
 }
+
+# Smart Home Panel - Extended constants
+WORK_TIME = "Work Time"
+BACKUP_FULL_CAPACITY = "Backup Full Capacity"
+CIRCUIT_N_POWER = "Circuit %i Power"
+CIRCUIT_N_NAME = "Circuit %i"
+CIRCUIT_N_ENABLED = "Circuit %i Enabled"
+CIRCUIT_N_CONTROL_MODE = "Circuit %i Control Mode"
+CIRCUIT_N_SUPPLY_STATUS = "Circuit %i Supply Status"
+CIRCUIT_N_PRIORITY = "Circuit %i Priority"
+
+BACKUP_CHANNEL_N_ENABLED = "Backup Channel %i Enabled"
+BACKUP_CHANNEL_N_CONTROL_MODE = "Backup Channel %i Control Mode"
+BACKUP_CHANNEL_N_SUPPLY_STATUS = "Backup Channel %i Supply Status"
+
+SPLIT_PHASE_N_LINKED = "Circuit %i Split-Phase Linked"
+SPLIT_PHASE_N_LINK_CHANNEL = "Circuit %i Split-Phase Link Channel"
+
+RTC_TIME = "RTC Time"
+CONFIGURATION_STATUS = "Configuration Status"
+AREA_INFO = "Area Info"
+
+EMERGENCY_MODE_CONFIGURED = "Emergency Mode Configured"
+EMERGENCY_BACKUP_MODE = "Emergency Backup Mode"
+EMERGENCY_OVERLOAD_MODE = "Emergency Overload Mode"
+
+SELF_CHECK_STATUS = "Self-Check Status"
+
+CHANNEL_CURRENT_N = "Channel %i Max Current"
+
+# Smart Home Panel - Grid configuration options
+GRID_VOLTAGE_OPTIONS = {
+    "110V": 110,
+    "120V": 120,
+    "220V": 220,
+    "230V": 230,
+    "240V": 240,
+}
+
+GRID_FREQUENCY_OPTIONS = {
+    "50Hz": 50,
+    "60Hz": 60,
+}
+
+# Smart Home Panel - Channel current options (Amps)
+CHANNEL_CURRENT_OPTIONS = {
+    "6A": 6,
+    "13A": 13,
+    "16A": 16,
+    "20A": 20,
+    "30A": 30,
+}
+
+# Smart Home Panel - Control mode options
+CHANNEL_CONTROL_MODE_OPTIONS = {
+    "Auto": 0,
+    "Manual": 1,
+}
+
+# Smart Home Panel - Supply status options
+CHANNEL_SUPPLY_STATUS_OPTIONS = {
+    "Grid Supply": 0,
+    "Battery Supply": 1,
+    "Off": 2,
+}
+
+# Smart Home Panel - Emergency backup mode options
+EMERGENCY_BACKUP_MODE_OPTIONS = {
+    "Disabled": 0,
+    "Enabled": 1,
+}
+
+# Smart Home Panel - Emergency overload mode options
+EMERGENCY_OVERLOAD_MODE_OPTIONS = {
+    "Disabled": 0,
+    "Enabled": 1,
+}
