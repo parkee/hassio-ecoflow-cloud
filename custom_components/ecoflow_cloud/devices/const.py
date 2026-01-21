@@ -518,3 +518,14 @@ EMERGENCY_OVERLOAD_MODE_OPTIONS = {
     "Disabled": 0,
     "Enabled": 1,
 }
+
+# Smart Home Panel - Circuit mode options (combined ctrlMode + ctrlSta)
+CIRCUIT_MODE_OPTIONS = {
+    "Auto": 0,       # ctrlMode=0 (auto)
+    "Grid": 1,       # ctrlMode=1 (manual), ctrlSta=0 (grid)
+    "Battery": 2,    # ctrlMode=1 (manual), ctrlSta=1 (battery)
+    "Off": 3,        # ctrlMode=1 (manual), ctrlSta=2 (off)
+}
+
+# Smart Home Panel - Backup channel current
+BACKUP_CHANNEL_N_CURRENT = "Backup Channel %i Current"

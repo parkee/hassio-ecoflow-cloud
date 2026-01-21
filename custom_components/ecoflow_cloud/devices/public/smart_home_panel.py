@@ -3,13 +3,25 @@ Smart Home Panel (SHP) device implementation for EcoFlow Cloud integration.
 
 Based on the official EcoFlow IoT Developer Platform documentation for Smart Home Panel.
 Implements both HTTP and MQTT communication modes with comprehensive sensor, switch,
-number, select, and button entities.
+number, select, button, and text entities.
 
 API Reference:
 - HTTP API: PUT/GET /iot-open/sign/device/quota
 - MQTT Topics: /open/${certificateAccount}/${sn}/{set|set_reply|quota|status}
+
+Features:
+- 10 load channels (0-9) with individual power monitoring and control
+- 2 backup/standby channels (10-11) for battery connections
+- Split-phase configuration for 240V circuits
+- EPS (Emergency Power Supply) mode
+- Scheduled charging/discharging jobs
+- Emergency mode configuration
+- Grid power monitoring and configuration
+- Circuit name configuration
+- Command reply monitoring
 """
 import logging
+import random
 from typing import Any
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
@@ -55,13 +67,15 @@ class SmartHomePanel(BaseDevice):
     Smart Home Panel device implementation.
 
     Supports:
-    - 10 load channels (0-9) with individual control
+    - 10 load channels (0-9) with individual control and power monitoring
     - 2 backup/standby channels (10-11) for battery connections
     - Split-phase configuration for 240V circuits
     - EPS (Emergency Power Supply) mode
     - Scheduled charging/discharging jobs
     - Emergency mode configuration
     - Grid power monitoring and configuration
+    - Circuit name configuration
+    - Command status monitoring
     """
 
     def sensors(self, client: EcoflowApiClient) -> list[SensorEntity]:
@@ -71,23 +85,50 @@ class SmartHomePanel(BaseDevice):
             QuotaStatusSensorEntity(client, self),
 
             # ===== Heartbeat / Main Status Sensors =====
-            # Battery level sensors
+            # Combined battery level
             LevelSensorEntity(
                 client, self, "heartbeat.backupBatPer", const.COMBINED_BATTERY_LEVEL
             ),
+
+            # Individual battery levels (for multi-battery setups)
             LevelSensorEntity(
                 client, self, "heartbeat.energyInfos[0].batteryPercentage",
-                const.BATTERY_N_LEVEL % 1
+                const.BATTERY_N_LEVEL % 1, False
             ),
             LevelSensorEntity(
                 client, self, "heartbeat.energyInfos[1].batteryPercentage",
                 const.BATTERY_N_LEVEL % 2, False
             ),
 
-            # Remaining time sensors
+            # Backup full capacity (Wh)
+            WattsSensorEntity(
+                client, self, "heartbeat.backupFullCap", const.BACKUP_FULL_CAPACITY, True
+            ).with_icon("mdi:battery-high"),
+
+            # Grid status (0=disconnected, 1=connected)
+            MiscSensorEntity(
+                client, self, "heartbeat.gridSta", const.POWER_GRID
+            ).with_icon("mdi:transmission-tower"),
+
+            # Energy consumption - Daily
+            InEnergySensorEntity(
+                client, self, "heartbeat.gridDayWatth", const.POWER_GRID_TODAY
+            ),
+            OutEnergySensorEntity(
+                client, self, "heartbeat.backupDayWatth", const.BATTERY_TODAY
+            ),
+
+            # Work time (device uptime in minutes)
+            MiscSensorEntity(
+                client, self, "heartbeat.workTime", const.WORK_TIME, True
+            ).with_icon("mdi:timer-outline"),
+
+            # Backup charge/discharge time remaining
             RemainSensorEntity(
                 client, self, "heartbeat.backupChaTime", const.REMAINING_TIME
             ),
+
+            # Individual battery remaining times
             RemainSensorEntity(
                 client, self, "heartbeat.energyInfos[0].chargeTime",
                 const.BATTERY_N_CHARGE_REMAINING_TIME % 1, False
@@ -105,20 +146,20 @@ class SmartHomePanel(BaseDevice):
                 const.BATTERY_N_DISCHARGE_REMAINING_TIME % 2, False
             ),
 
-            # Temperature sensors
+            # Battery temperatures
             TempSensorEntity(
                 client, self, "heartbeat.energyInfos[0].emsBatTemp",
-                const.BATTERY_N_TEMP % 1
+                const.BATTERY_N_TEMP % 1, False
             ),
             TempSensorEntity(
                 client, self, "heartbeat.energyInfos[1].emsBatTemp",
                 const.BATTERY_N_TEMP % 2, False
             ),
 
-            # Power sensors for batteries
+            # Battery power in/out
             InWattsSensorEntity(
                 client, self, "heartbeat.energyInfos[0].lcdInputWatts",
-                const.BATTERY_N_IN_POWER % 1
+                const.BATTERY_N_IN_POWER % 1, False
             ).with_energy().with_icon("mdi:transmission-tower"),
             InWattsSensorEntity(
                 client, self, "heartbeat.energyInfos[1].lcdInputWatts",
@@ -126,50 +167,35 @@ class SmartHomePanel(BaseDevice):
             ).with_energy().with_icon("mdi:transmission-tower"),
             OutWattsSensorEntity(
                 client, self, "heartbeat.energyInfos[0].outputPower",
-                const.BATTERY_N_OUT_POWER % 1
+                const.BATTERY_N_OUT_POWER % 1, False
             ).with_energy().with_icon("mdi:home-battery"),
             OutWattsSensorEntity(
                 client, self, "heartbeat.energyInfos[1].outputPower",
                 const.BATTERY_N_OUT_POWER % 2, False
             ).with_energy().with_icon("mdi:home-battery"),
 
-            # Energy consumption sensors
-            InEnergySensorEntity(
-                client, self, "heartbeat.gridDayWatth", const.POWER_GRID_TODAY
-            ),
-            OutEnergySensorEntity(
-                client, self, "heartbeat.backupDayWatth", const.BATTERY_TODAY
-            ),
-
-            # Work time sensor (device uptime in minutes)
-            MiscSensorEntity(
-                client, self, "heartbeat.workTime", const.WORK_TIME, False
-            ).with_icon("mdi:timer-outline"),
-
-            # Backup full capacity sensor
-            WattsSensorEntity(
-                client, self, "heartbeat.backupFullCap", const.BACKUP_FULL_CAPACITY, False
-            ).with_icon("mdi:battery-high"),
-
-            # ===== Grid Configuration Sensors (Diagnostic) =====
+            # ===== Grid Configuration Sensors =====
             VoltSensorEntity(
-                client, self, "'gridInfo.gridVol'", const.POWER_GRID_VOLTAGE,
-                diagnostic=True
+                client, self, "'gridInfo.gridVol'", const.POWER_GRID_VOLTAGE, True
             ),
             FrequencySensorEntity(
-                client, self, "'gridInfo.gridFreq'", const.POWER_GRID_FREQUENCY,
-                diagnostic=True
+                client, self, "'gridInfo.gridFreq'", const.POWER_GRID_FREQUENCY, True
             ),
 
-            # ===== Backup charging/discharging configuration sensors =====
+            # ===== Backup Charging/Discharging Configuration =====
             LevelSensorEntity(
                 client, self, "'backupChaDiscCfg.forceChargeHigh'",
-                const.MAX_CHARGE_LEVEL, False, diagnostic=True
+                const.MAX_CHARGE_LEVEL, False
             ),
             LevelSensorEntity(
                 client, self, "'backupChaDiscCfg.discLower'",
-                const.MIN_DISCHARGE_LEVEL, False, diagnostic=True
+                const.MIN_DISCHARGE_LEVEL, False
             ),
+
+            # ===== EPS Mode Status =====
+            MiscSensorEntity(
+                client, self, "'epsModeInfo.eps'", const.EPS_MODE, False
+            ).with_icon("mdi:power-plug-battery"),
 
             # ===== Area/Region Information =====
             MiscSensorEntity(
@@ -181,40 +207,41 @@ class SmartHomePanel(BaseDevice):
                 client, self, "'cfgSta.sta'", const.CONFIGURATION_STATUS, False
             ).with_icon("mdi:cog"),
 
-            # ===== Channel Current Configuration (Diagnostic) =====
-            # Load channels (0-9) current ratings
-            *[
-                AmpSensorEntity(
-                    client, self, f"'loadChCurInfo.cur'[{i}]",
-                    const.CIRCUIT_N_CURRENT % (i + 1), False, diagnostic=True
-                )
-                for i in range(10)
-            ],
-            # Backup channels (10-11) current ratings
-            *[
-                AmpSensorEntity(
-                    client, self, f"'loadChCurInfo.cur'[{i}]",
-                    const.BATTERY_N_CURRENT % (i - 9), False, diagnostic=True
-                )
-                for i in range(10, 12)
-            ],
+            # ===== Self-Check Status =====
+            MiscSensorEntity(
+                client, self, "'selfCheck.flag'", const.SELF_CHECK_STATUS, False
+            ).with_icon("mdi:check-circle"),
         ]
 
-        # ===== Load Channel Sensors (10 channels: 0-9) =====
+        # ===== Circuit Power Consumption Sensors (from infoList) =====
+        # These show real-time power consumption per circuit
         for i in range(10):
             channel_num = i + 1
-            # Channel control status sensors
+            sensors.append(
+                OutWattsSensorEntity(
+                    client, self,
+                    f"'infoList'[{i}].chWatt",
+                    const.CIRCUIT_N_POWER % channel_num, True
+                ).with_energy().with_icon("mdi:lightning-bolt")
+            )
+
+        # ===== Load Channel Status Sensors (from heartbeat.loadCmdChCtrlInfos) =====
+        for i in range(10):
+            channel_num = i + 1
             sensors.extend([
+                # Control status (0=grid, 1=battery, 2=off)
                 MiscSensorEntity(
                     client, self,
                     f"heartbeat.loadCmdChCtrlInfos[{i}].ctrlSta",
                     const.CIRCUIT_N_SUPPLY_STATUS % channel_num, False
                 ).with_icon("mdi:power-plug"),
+                # Control mode (0=auto, 1=manual)
                 MiscSensorEntity(
                     client, self,
                     f"heartbeat.loadCmdChCtrlInfos[{i}].ctrlMode",
                     const.CIRCUIT_N_CONTROL_MODE % channel_num, False
                 ).with_icon("mdi:auto-fix"),
+                # Priority
                 MiscSensorEntity(
                     client, self,
                     f"heartbeat.loadCmdChCtrlInfos[{i}].priority",
@@ -222,7 +249,7 @@ class SmartHomePanel(BaseDevice):
                 ).with_icon("mdi:priority-high"),
             ])
 
-        # ===== Backup Channel Sensors (2 channels: 10-11) =====
+        # ===== Backup Channel Status Sensors (from heartbeat.backupCmdChCtrlInfos) =====
         for i in range(2):
             channel_num = i + 1
             sensors.extend([
@@ -238,7 +265,38 @@ class SmartHomePanel(BaseDevice):
                 ).with_icon("mdi:auto-fix"),
             ])
 
-        # ===== Split-Phase Configuration Sensors (Diagnostic) =====
+        # ===== Channel Current Configuration Sensors =====
+        # Load channels (0-9)
+        for i in range(10):
+            channel_num = i + 1
+            sensors.append(
+                AmpSensorEntity(
+                    client, self, f"'loadChCurInfo.cur'[{i}]",
+                    const.CIRCUIT_N_CURRENT % channel_num, False
+                )
+            )
+        # Backup channels (10-11)
+        for i in range(10, 12):
+            channel_num = i - 9
+            sensors.append(
+                AmpSensorEntity(
+                    client, self, f"'loadChCurInfo.cur'[{i}]",
+                    const.BACKUP_CHANNEL_N_CURRENT % channel_num, False
+                )
+            )
+
+        # ===== Channel Name Sensors (from loadChInfo) =====
+        for i in range(10):
+            channel_num = i + 1
+            sensors.append(
+                MiscSensorEntity(
+                    client, self,
+                    f"'loadChInfo.info'[{i}].chName",
+                    const.CIRCUIT_N_NAME % channel_num, False
+                ).with_icon("mdi:tag")
+            )
+
+        # ===== Split-Phase Configuration Sensors =====
         for i in range(10):
             channel_num = i + 1
             sensors.extend([
@@ -270,25 +328,33 @@ class SmartHomePanel(BaseDevice):
             ).with_icon("mdi:flash-alert"),
         ])
 
-        # ===== Self-Check Status =====
-        sensors.append(
-            MiscSensorEntity(
-                client, self, "'selfCheck.flag'",
-                const.SELF_CHECK_STATUS, False
-            ).with_icon("mdi:check-circle")
-        )
+        # ===== Emergency Strategy Channel Status =====
+        for i in range(10):
+            channel_num = i + 1
+            sensors.extend([
+                MiscSensorEntity(
+                    client, self,
+                    f"'emergencyStrategy.chSta'[{i}].priority",
+                    f"Emergency Priority Circuit {channel_num}", False
+                ).with_icon("mdi:priority-high"),
+                MiscSensorEntity(
+                    client, self,
+                    f"'emergencyStrategy.chSta'[{i}].isEnable",
+                    f"Emergency Enabled Circuit {channel_num}", False
+                ).with_icon("mdi:check-circle"),
+            ])
 
         return sensors
 
     def binary_sensors(self, client: EcoflowApiClient) -> list[BinarySensorEntity]:
         """Return all binary sensor entities for the Smart Home Panel."""
         return [
-            # Grid power status (0 = off, 1 = on)
+            # Grid power status (0=off, 1=on)
             MiscBinarySensorEntity(
                 client, self, "heartbeat.gridSta", const.POWER_GRID
             ).with_icon("mdi:transmission-tower"),
 
-            # EPS mode status
+            # EPS mode active
             MiscBinarySensorEntity(
                 client, self, "'epsModeInfo.eps'", const.EPS_MODE
             ).with_icon("mdi:power-plug-battery"),
@@ -304,42 +370,77 @@ class SmartHomePanel(BaseDevice):
                 "'backupChaDiscCfg.discLower'",
                 const.MIN_DISCHARGE_LEVEL,
                 0,
-                30,
-                lambda value, params: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 29,
+                100,
+                lambda value, params: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=29,
+                    params={
                         "discLower": int(value),
                         "forceChargeHigh": int(
                             params.get("backupChaDiscCfg.forceChargeHigh", 100)
                         ),
                     },
-                },
+                ),
             ),
             MaxBatteryLevelEntity(
                 client,
                 self,
                 "'backupChaDiscCfg.forceChargeHigh'",
                 const.MAX_CHARGE_LEVEL,
-                50,
+                0,
                 100,
-                lambda value, params: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 29,
+                lambda value, params: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=29,
+                    params={
                         "forceChargeHigh": int(value),
                         "discLower": int(
                             params.get("backupChaDiscCfg.discLower", 0)
                         ),
                     },
-                },
+                ),
             ),
+
+            # ===== Grid Voltage Setting (cmdSet: 11, id: 22) =====
+            ValueUpdateEntity(
+                client,
+                self,
+                "'gridInfo.gridVol'",
+                const.POWER_GRID_VOLTAGE + " Setting",
+                100,
+                250,
+                lambda value, params: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=22,
+                    params={
+                        "gridVol": int(value),
+                        "gridFreq": int(params.get("gridInfo.gridFreq", 60)),
+                    },
+                ),
+                enabled=False,
+            ).with_icon("mdi:flash"),
+
+            # ===== Grid Frequency Setting (cmdSet: 11, id: 22) =====
+            ValueUpdateEntity(
+                client,
+                self,
+                "'gridInfo.gridFreq'",
+                const.POWER_GRID_FREQUENCY + " Setting",
+                50,
+                60,
+                lambda value, params: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=22,
+                    params={
+                        "gridVol": int(params.get("gridInfo.gridVol", 120)),
+                        "gridFreq": int(value),
+                    },
+                ),
+                enabled=False,
+            ).with_icon("mdi:sine-wave"),
         ]
 
         # ===== Channel Current Configuration (cmdSet: 11, id: 20) =====
-        # Channel current configuration for load channels 0-9
         for i in range(10):
             channel_num = i + 1
             numbers.append(
@@ -350,15 +451,15 @@ class SmartHomePanel(BaseDevice):
                     const.CHANNEL_CURRENT_N % channel_num,
                     6,
                     30,
-                    lambda value, ch=i: {
-                        "operateType": "TCP",
-                        "params": {
-                            "cmdSet": 11,
-                            "id": 20,
+                    lambda value, params, ch=i: self._create_mqtt_command(
+                        cmdSet=11,
+                        cmdId=20,
+                        params={
                             "chNum": ch,
                             "cur": int(value),
                         },
-                    },
+                    ),
+                    enabled=False,
                 ).with_icon("mdi:current-ac")
             )
 
@@ -373,37 +474,32 @@ class SmartHomePanel(BaseDevice):
                 self,
                 "'epsModeInfo.eps'",
                 const.EPS_MODE,
-                lambda value: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 24,
-                        "eps": int(value),
-                    },
-                },
+                lambda value: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=24,
+                    params={"eps": 1 if value else 0},
+                ),
             )
             .with_category(EntityCategory.CONFIG)
             .with_icon("mdi:power-plug-battery"),
         ]
 
-        # ===== Load Channel Switches (cmdSet: 11, id: 16) =====
-        # Channels 0-9 (displayed as 1-10)
+        # ===== Load Channel On/Off Switches (cmdSet: 11, id: 16) =====
+        # These control whether the circuit is on (grid/battery) or off
         for i in range(10):
             channel_num = i + 1
-            ch_name = self.data.params.get(
-                f"loadChInfo.info[{i}].chName",
-                const.CIRCUIT_N_NAME % channel_num
-            )
             switches.append(
-                self._createLoadChannelSwitch(client, i, ch_name)
+                self._create_load_channel_switch(client, i, channel_num)
             )
 
         # ===== Backup/Standby Channel Switches (cmdSet: 11, id: 17) =====
-        # Channels 10-11 (backup battery connections)
-        switches.append(self._createBackupChannelSwitch(client, 1, True))
-        switches.append(self._createBackupChannelSwitch(client, 2, False))
+        for i in range(2):
+            channel_num = i + 1
+            switches.append(
+                self._create_backup_channel_switch(client, i, channel_num)
+            )
 
-        # ===== Channel Enable Switches (cmdSet: 11, id: 26) =====
+        # ===== Channel Enable Switches for Emergency Mode (cmdSet: 11, id: 26) =====
         for i in range(10):
             channel_num = i + 1
             switches.append(
@@ -412,15 +508,14 @@ class SmartHomePanel(BaseDevice):
                     self,
                     f"'emergencyStrategy.chSta'[{i}].isEnable",
                     const.CIRCUIT_N_ENABLED % channel_num,
-                    lambda value, ch=i: {
-                        "operateType": "TCP",
-                        "params": {
-                            "cmdSet": 11,
-                            "id": 26,
+                    lambda value, ch=i: self._create_mqtt_command(
+                        cmdSet=11,
+                        cmdId=26,
+                        params={
                             "chNum": ch,
-                            "isEnable": int(value),
+                            "isEnable": 1 if value else 0,
                         },
-                    },
+                    ),
                     enabled=False,
                 )
                 .with_category(EntityCategory.CONFIG)
@@ -432,41 +527,39 @@ class SmartHomePanel(BaseDevice):
     def selects(self, client: EcoflowApiClient) -> list[SelectEntity]:
         """Return all select entities for the Smart Home Panel."""
         selects = [
-            # ===== Grid Voltage Configuration (cmdSet: 11, id: 22) =====
+            # ===== Grid Voltage Select (cmdSet: 11, id: 22) =====
             DictSelectEntity(
                 client,
                 self,
                 "'gridInfo.gridVol'",
-                const.POWER_GRID_VOLTAGE,
+                const.POWER_GRID_VOLTAGE + " Select",
                 const.GRID_VOLTAGE_OPTIONS,
-                lambda value, params: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 22,
+                lambda value, params: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=22,
+                    params={
                         "gridVol": int(value),
                         "gridFreq": int(params.get("gridInfo.gridFreq", 60)),
                     },
-                },
+                ),
                 enabled=False,
             ).with_icon("mdi:flash"),
 
-            # ===== Grid Frequency Configuration (cmdSet: 11, id: 22) =====
+            # ===== Grid Frequency Select (cmdSet: 11, id: 22) =====
             DictSelectEntity(
                 client,
                 self,
                 "'gridInfo.gridFreq'",
-                const.POWER_GRID_FREQUENCY,
+                const.POWER_GRID_FREQUENCY + " Select",
                 const.GRID_FREQUENCY_OPTIONS,
-                lambda value, params: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 22,
+                lambda value, params: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=22,
+                    params={
                         "gridVol": int(params.get("gridInfo.gridVol", 120)),
                         "gridFreq": int(value),
                     },
-                },
+                ),
                 enabled=False,
             ).with_icon("mdi:sine-wave"),
 
@@ -477,7 +570,7 @@ class SmartHomePanel(BaseDevice):
                 "'emergencyStrategy.backupMode'",
                 const.EMERGENCY_BACKUP_MODE,
                 const.EMERGENCY_BACKUP_MODE_OPTIONS,
-                lambda value, params: self._createEmergencyModeCommand(
+                lambda value, params: self._create_emergency_mode_command(
                     backupMode=int(value),
                     overloadMode=int(params.get("emergencyStrategy.overloadMode", 0)),
                     params=params,
@@ -492,7 +585,7 @@ class SmartHomePanel(BaseDevice):
                 "'emergencyStrategy.overloadMode'",
                 const.EMERGENCY_OVERLOAD_MODE,
                 const.EMERGENCY_OVERLOAD_MODE_OPTIONS,
-                lambda value, params: self._createEmergencyModeCommand(
+                lambda value, params: self._create_emergency_mode_command(
                     backupMode=int(params.get("emergencyStrategy.backupMode", 0)),
                     overloadMode=int(value),
                     params=params,
@@ -501,7 +594,30 @@ class SmartHomePanel(BaseDevice):
             ).with_icon("mdi:flash-alert"),
         ]
 
-        # ===== Load Channel Control Mode Selects =====
+        # ===== Circuit Current Limit Selects (cmdSet: 11, id: 20) =====
+        for i in range(10):
+            channel_num = i + 1
+            selects.append(
+                DictSelectEntity(
+                    client,
+                    self,
+                    f"'loadChCurInfo.cur'[{i}]",
+                    f"Circuit {channel_num} Current Limit",
+                    const.CHANNEL_CURRENT_OPTIONS,
+                    lambda value, params, ch=i: self._create_mqtt_command(
+                        cmdSet=11,
+                        cmdId=20,
+                        params={
+                            "chNum": ch,
+                            "cur": int(value),
+                        },
+                    ),
+                    enabled=False,
+                ).with_icon("mdi:current-ac")
+            )
+
+        # ===== Circuit Mode Control Selects (cmdSet: 11, id: 16) =====
+        # Options: Auto, Grid, Battery, Off
         for i in range(10):
             channel_num = i + 1
             selects.append(
@@ -509,20 +625,37 @@ class SmartHomePanel(BaseDevice):
                     client,
                     self,
                     f"heartbeat.loadCmdChCtrlInfos[{i}].ctrlMode",
-                    const.CIRCUIT_N_CONTROL_MODE % channel_num,
+                    f"Circuit {channel_num} Mode",
+                    const.CIRCUIT_MODE_OPTIONS,
+                    lambda value, params, ch=i: self._create_circuit_mode_command(
+                        channel=ch,
+                        mode=int(value),
+                        params=params,
+                    ),
+                ).with_icon("mdi:power-plug")
+            )
+
+        # ===== Backup Channel Mode Control Selects (cmdSet: 11, id: 17) =====
+        for i in range(2):
+            channel_num = i + 1
+            selects.append(
+                DictSelectEntity(
+                    client,
+                    self,
+                    f"heartbeat.backupCmdChCtrlInfos[{i}].ctrlMode",
+                    f"Backup Channel {channel_num} Mode",
                     const.CHANNEL_CONTROL_MODE_OPTIONS,
-                    lambda value, ch=i: {
-                        "operateType": "TCP",
-                        "params": {
-                            "cmdSet": 11,
-                            "id": 16,
-                            "ch": ch,
+                    lambda value, params, ch=i: self._create_mqtt_command(
+                        cmdSet=11,
+                        cmdId=17,
+                        params={
+                            "ch": 10 + ch,
                             "ctrlMode": int(value),
-                            "sta": 1,  # Keep current status
+                            "sta": 1,
                         },
-                    },
+                    ),
                     enabled=False,
-                ).with_icon("mdi:auto-fix")
+                ).with_icon("mdi:battery-charging")
             )
 
         return selects
@@ -536,13 +669,7 @@ class SmartHomePanel(BaseDevice):
                 self,
                 "reset",
                 "Reset Device",
-                lambda _: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 1,
-                        "id": 20,
-                    },
-                },
+                lambda _: self._create_mqtt_command(cmdSet=1, cmdId=20, params={}),
                 enabled=False,
             ).with_icon("mdi:restart"),
 
@@ -552,26 +679,21 @@ class SmartHomePanel(BaseDevice):
                 self,
                 "selfCheck",
                 "Start Self-Check",
-                lambda _: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 112,
-                        "selfCheckType": 1,
-                    },
-                },
+                lambda _: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=112,
+                    params={"selfCheckType": 1},
+                ),
                 enabled=False,
             ).with_icon("mdi:check-circle-outline"),
 
             # ===== RTC Time Sync Button (cmdSet: 11, id: 3) =====
-            # Note: This syncs the device RTC with current time
             EnabledButtonEntity(
                 client,
                 self,
                 "rtcSync",
                 "Sync RTC Time",
-                lambda _: self._createRtcSyncCommand(),
-                enabled=False,
+                lambda _: self._create_rtc_sync_command(),
             ).with_icon("mdi:clock-sync"),
 
             # ===== Configuration Status Set Button (cmdSet: 11, id: 7) =====
@@ -580,16 +702,23 @@ class SmartHomePanel(BaseDevice):
                 self,
                 "cfgComplete",
                 "Mark Configuration Complete",
-                lambda _: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 7,
-                        "cfgSta": 1,
-                    },
-                },
+                lambda _: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=7,
+                    params={"cfgSta": 1},
+                ),
                 enabled=False,
             ).with_icon("mdi:check-bold"),
+
+            # ===== Get Configuration Status Button (cmdSet: 11, id: 8) =====
+            EnabledButtonEntity(
+                client,
+                self,
+                "getCfgSta",
+                "Get Configuration Status",
+                lambda _: self._create_mqtt_command(cmdSet=11, cmdId=8, params={}),
+                enabled=False,
+            ).with_icon("mdi:cog-refresh"),
         ]
 
     def flat_json(self):
@@ -601,53 +730,79 @@ class SmartHomePanel(BaseDevice):
         """
         return False
 
-    def _createLoadChannelSwitch(
-        self, client: EcoflowApiClient, channel: int, name: str
+    def _create_mqtt_command(
+        self, cmdSet: int, cmdId: int, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Create a properly formatted MQTT command with all required fields.
+
+        Args:
+            cmdSet: Command set number
+            cmdId: Command ID within the set
+            params: Command-specific parameters
+
+        Returns:
+            Complete MQTT command dictionary
+        """
+        return {
+            "id": random.randint(100000, 999999),
+            "moduleType": 1,
+            "operateType": "TCP",
+            "version": "1.0",
+            "params": {
+                "cmdSet": cmdSet,
+                "id": cmdId,
+                **params,
+            },
+        }
+
+    def _create_load_channel_switch(
+        self, client: EcoflowApiClient, channel_index: int, channel_num: int
     ) -> SwitchEntity:
         """
-        Create a load channel switch (cmdSet: 11, id: 16).
+        Create a load channel on/off switch (cmdSet: 11, id: 16).
 
         Args:
             client: The API client
-            channel: Channel number (0-9)
-            name: Display name for the channel
+            channel_index: Channel index (0-9)
+            channel_num: Channel number for display (1-10)
 
         Returns:
-            Switch entity for controlling the load channel
+            Switch entity for controlling the load channel on/off state
         """
         return (
             EnabledEntity(
                 client,
                 self,
-                f"heartbeat.loadCmdChCtrlInfos[{channel}].ctrlSta",
-                name,
-                lambda value, ch=channel: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 16,
+                f"heartbeat.loadCmdChCtrlInfos[{channel_index}].ctrlSta",
+                f"Circuit {channel_num}",
+                lambda value, ch=channel_index: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=16,
+                    params={
                         "ch": ch,
                         "ctrlMode": 1,  # Manual mode
-                        "sta": 1 if value else 2,  # 1=battery supply, 2=off
+                        "sta": 1 if value else 2,  # 1=on (battery), 2=off
                     },
-                },
-                True,
-                enableValue=1,  # Battery supply = on
-                disableValue=2,  # Off
+                ),
+                True,  # enabled
+                True,  # auto_enable
+                1,  # enableValue (battery supply = on)
+                2,  # disableValue (off)
             )
             .with_icon("mdi:electric-switch")
         )
 
-    def _createBackupChannelSwitch(
-        self, client: EcoflowApiClient, index: int, enabled: bool = True
+    def _create_backup_channel_switch(
+        self, client: EcoflowApiClient, channel_index: int, channel_num: int
     ) -> SwitchEntity:
         """
         Create a backup/standby channel switch (cmdSet: 11, id: 17).
 
         Args:
             client: The API client
-            index: Backup channel index (1-2, maps to channels 10-11)
-            enabled: Whether the entity is enabled by default
+            channel_index: Backup channel index (0-1)
+            channel_num: Channel number for display (1-2)
 
         Returns:
             Switch entity for controlling the backup channel
@@ -656,27 +811,70 @@ class SmartHomePanel(BaseDevice):
             EnabledEntity(
                 client,
                 self,
-                f"heartbeat.backupCmdChCtrlInfos[{index - 1}].ctrlSta",
-                const.BATTERY_N_CHARGE % index,
-                lambda value, idx=index: {
-                    "operateType": "TCP",
-                    "params": {
-                        "cmdSet": 11,
-                        "id": 17,
-                        "ch": 9 + idx,  # Channel 10 or 11
-                        "ctrlMode": 1 if value else 0,  # Manual when on
-                        "sta": 2 if value else 0,  # 2=battery supply when on, 0=grid
+                f"heartbeat.backupCmdChCtrlInfos[{channel_index}].ctrlSta",
+                f"Backup Channel {channel_num}",
+                lambda value, idx=channel_index: self._create_mqtt_command(
+                    cmdSet=11,
+                    cmdId=17,
+                    params={
+                        "ch": 10 + idx,  # Channel 10 or 11
+                        "ctrlMode": 1 if value else 0,
+                        "sta": 1 if value else 0,
                     },
-                },
-                enabled,
-                enableValue=2,  # Battery supply
-                disableValue=0,  # Grid supply
+                ),
+                True,  # enabled
+                True,  # auto_enable
+                1,  # enableValue
+                0,  # disableValue
             )
             .with_category(EntityCategory.CONFIG)
             .with_icon("mdi:battery-charging")
         )
 
-    def _createEmergencyModeCommand(
+    def _create_circuit_mode_command(
+        self, channel: int, mode: int, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Create a circuit mode control command (cmdSet: 11, id: 16).
+
+        The mode value is encoded as:
+        - 0: Auto (ctrlMode=0)
+        - 1: Grid (ctrlMode=1, sta=0)
+        - 2: Battery (ctrlMode=1, sta=1)
+        - 3: Off (ctrlMode=1, sta=2)
+
+        Args:
+            channel: Channel number (0-9)
+            mode: Mode value (0=Auto, 1=Grid, 2=Battery, 3=Off)
+            params: Current device parameters
+
+        Returns:
+            Command dictionary for circuit mode control
+        """
+        if mode == 0:  # Auto
+            ctrl_mode = 0
+            sta = params.get(f"heartbeat.loadCmdChCtrlInfos[{channel}].ctrlSta", 0)
+        elif mode == 1:  # Grid
+            ctrl_mode = 1
+            sta = 0
+        elif mode == 2:  # Battery
+            ctrl_mode = 1
+            sta = 1
+        else:  # Off
+            ctrl_mode = 1
+            sta = 2
+
+        return self._create_mqtt_command(
+            cmdSet=11,
+            cmdId=16,
+            params={
+                "ch": channel,
+                "ctrlMode": ctrl_mode,
+                "sta": sta,
+            },
+        )
+
+    def _create_emergency_mode_command(
         self, backupMode: int, overloadMode: int, params: dict[str, Any]
     ) -> dict[str, Any]:
         """
@@ -700,19 +898,18 @@ class SmartHomePanel(BaseDevice):
                 "isEnable": int(isEnable),
             })
 
-        return {
-            "operateType": "TCP",
-            "params": {
-                "cmdSet": 11,
-                "id": 64,
+        return self._create_mqtt_command(
+            cmdSet=11,
+            cmdId=64,
+            params={
                 "isCfg": 1,
                 "backupMode": backupMode,
                 "overloadMode": overloadMode,
                 "chSta": chSta,
             },
-        }
+        )
 
-    def _createRtcSyncCommand(self) -> dict[str, Any]:
+    def _create_rtc_sync_command(self) -> dict[str, Any]:
         """
         Create RTC time sync command (cmdSet: 11, id: 3).
 
@@ -724,17 +921,16 @@ class SmartHomePanel(BaseDevice):
         from datetime import datetime
 
         now = datetime.now()
-        return {
-            "operateType": "TCP",
-            "params": {
-                "cmdSet": 11,
-                "id": 3,
+        return self._create_mqtt_command(
+            cmdSet=11,
+            cmdId=3,
+            params={
                 "year": now.year,
                 "month": now.month,
                 "day": now.day,
                 "hour": now.hour,
                 "min": now.minute,
                 "sec": now.second,
-                "week": now.isoweekday(),  # 1=Monday, 7=Sunday
+                "week": now.isoweekday(),
             },
-        }
+        )
