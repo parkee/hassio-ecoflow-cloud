@@ -2574,7 +2574,8 @@ Restart Home Assistant. Once restart is done, use `Add Integration` → `Ecoflow
 
 *Switches*
 - EPS Mode
-- Backup Channel 1-2
+- Battery 1 Charge
+- Battery 2 Charge
 - Circuit 1-10 Emergency Enabled  _(disabled)_
 
 *Sliders (numbers)*
@@ -2591,7 +2592,8 @@ Restart Home Assistant. Once restart is done, use `Add Integration` → `Ecoflow
 - Emergency Overload Mode  _(disabled)_
 - Circuit 1-10 Current Limit  _(disabled)_
 - Circuit 1-10 Mode
-- Backup Channel 1-2 Mode  _(disabled)_
+- Battery 1 Charge Mode  _(disabled)_
+- Battery 2 Charge Mode  _(disabled)_
 
 *Buttons*
 - Reset Device  _(disabled)_

@@ -482,11 +482,12 @@ class SmartHomePanel(BaseDevice):
         # NOTE: Load Channel On/Off Switches removed - redundant with Circuit Mode selects
         # which provide Auto/Grid/Battery/Off options (more comprehensive control)
 
-        # ===== Backup/Standby Channel Switches (cmdSet: 11, id: 17) =====
+        # ===== Battery Charge Switches (cmdSet: 11, id: 17) =====
+        # Controls charging for batteries connected to backup channels 10 and 11
         for i in range(2):
             channel_num = i + 1
             switches.append(
-                self._create_backup_channel_switch(client, i, channel_num)
+                self._create_battery_charge_switch(client, i, channel_num)
             )
 
         # ===== Channel Enable Switches for Emergency Mode (cmdSet: 11, id: 26) =====
@@ -609,7 +610,7 @@ class SmartHomePanel(BaseDevice):
                 )
             )
 
-        # ===== Backup Channel Mode Control Selects (cmdSet: 11, id: 17) =====
+        # ===== Battery Charge Mode Control Selects (cmdSet: 11, id: 17) =====
         for i in range(2):
             channel_num = i + 1
             selects.append(
@@ -617,7 +618,7 @@ class SmartHomePanel(BaseDevice):
                     client,
                     self,
                     f"heartbeat.backupCmdChCtrlInfos[{i}].ctrlMode",
-                    f"Backup Channel {channel_num} Mode",
+                    f"Battery {channel_num} Charge Mode",
                     const.CHANNEL_CONTROL_MODE_OPTIONS,
                     self._make_backup_mode_command(i),
                     enabled=False,
@@ -781,26 +782,29 @@ class SmartHomePanel(BaseDevice):
             .with_icon("mdi:electric-switch")
         )
 
-    def _create_backup_channel_switch(
+    def _create_battery_charge_switch(
         self, client: EcoflowApiClient, channel_index: int, channel_num: int
     ) -> SwitchEntity:
         """
-        Create a backup/standby channel switch (cmdSet: 11, id: 17).
+        Create a battery charge on/off switch (cmdSet: 11, id: 17).
+
+        Controls whether the battery connected to backup channel 10 or 11
+        is allowed to charge from the grid.
 
         Args:
             client: The API client
             channel_index: Backup channel index (0-1)
-            channel_num: Channel number for display (1-2)
+            channel_num: Battery number for display (1-2)
 
         Returns:
-            Switch entity for controlling the backup channel
+            Switch entity for controlling battery charging
         """
         return (
             EnabledEntity(
                 client,
                 self,
                 f"heartbeat.backupCmdChCtrlInfos[{channel_index}].ctrlSta",
-                f"Backup Channel {channel_num}",
+                f"Battery {channel_num} Charge",
                 lambda value, idx=channel_index: self._create_mqtt_command(
                     cmdSet=11,
                     cmdId=17,
@@ -815,7 +819,6 @@ class SmartHomePanel(BaseDevice):
                 1,  # enableValue
                 0,  # disableValue
             )
-            .with_category(EntityCategory.CONFIG)
             .with_icon("mdi:battery-charging")
         )
 
